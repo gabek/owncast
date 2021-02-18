@@ -2,7 +2,9 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"net/url"
 	"os/exec"
 	"strings"
 
@@ -16,6 +18,7 @@ var Config *config
 var _default config
 
 type config struct {
+	Federation           Federation      `yaml:"federation"`
 	DatabaseFilePath     string          `yaml:"databaseFile"`
 	EnableDebugFeatures  bool            `yaml:"-"`
 	FFMpegPath           string          `yaml:"ffmpegPath"`
@@ -29,6 +32,11 @@ type config struct {
 	RTMPServerPort       int             `yaml:"rtmpServerPort"`
 	DisableUpgradeChecks bool            `yaml:"disableUpgradeChecks"`
 	YP                   YP              `yaml:"yp"`
+}
+
+type Federation struct {
+	Site     string `yaml:"site"`
+	Username string `yaml:"username"`
 }
 
 // InstanceDetails defines the user-visible information about this particular instance.
@@ -137,6 +145,14 @@ func (c *config) load(filePath string) error {
 func (c *config) verifySettings() error {
 	if c.VideoSettings.StreamingKey == "" {
 		return errors.New("No stream key set. Please set one in your config file.")
+	}
+
+	if c.Federation.Site == "" {
+		return errors.New("No site set. Please set one in your config file.")
+	}
+
+	if c.Federation.Username == "" {
+		return errors.New("No username set. Please set one in your config file.")
 	}
 
 	if c.S3.Enabled {
@@ -282,6 +298,26 @@ func (q *StreamQuality) GetIsAudioPassthrough() bool {
 	}
 
 	return false
+}
+
+func (f *Federation) GetDomain() (string, error) {
+	url, err := url.Parse(f.Site)
+
+	if err != nil {
+		return "", err
+	}
+
+	return url.Host, nil
+}
+
+func (f *Federation) GetSubject() (string, error) {
+	domain, err := f.GetDomain()
+
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("acct:%s@%s", f.Username, domain), nil
 }
 
 // Load tries to load the configuration file.
